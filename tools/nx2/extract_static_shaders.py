@@ -45,7 +45,7 @@ def walk_container(data, name, depth=0, dictionaries=None):
         parser = {b"BNSH": parse_bnsh, b"CGSB": parse_cgsb, b"SHN!": parse_shn, b"BAHS": parse_sharcb}[magic]
         for record in parser(data):
             yield {"member": name, **record}
-    elif name.lower().endswith((".json", ".presetb", ".meminfo", ".tex", ".byml", ".yaml", ".raw")):
+    elif name.lower().endswith((".json", ".presetb", ".meminfo", ".metaparam", ".tex", ".byml", ".yaml", ".raw")):
         return
     else:
         raise ArchiveError(f"unsupported container magic {magic.hex()}")

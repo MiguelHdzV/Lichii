@@ -149,6 +149,7 @@ def dcx_decompress(data):
         if not decoder.eof or decoder.unused_data:
             raise ArchiveError("incomplete or trailing DCX zlib stream")
     else:
+        # KRAK (Oodle Kraken) is decoded only by the emulator's precache (externals/ooz).
         raise ArchiveError(f"unsupported DCX compressor {data[0x28:0x2c]!r}")
     if len(result) != size:
         raise ArchiveError("DCX decompressed size mismatch")
@@ -157,7 +158,10 @@ def dcx_decompress(data):
 
 def parse_bnd4(data):
     extent(data, 0, 64)
-    if data[:4] != b"BND4" or data[9:12] != b"\0\1\0" or data[48:52] != b"\1t\0\0":
+    # Format 0x74, or 0x54 (no names1 flag, same records), with or without the unread name hash
+    # table (extended = 4): Duskbloods' material bundles use both.
+    if (data[:4] != b"BND4" or data[9:12] != b"\0\1\0" or data[48] != 1 or data[49:50] not in (b"t", b"T")
+            or data[50] not in (0, 4) or data[51] != 0):
         raise ArchiveError("unsupported BND4 byte order or file-record format")
     count, = struct.unpack_from("<I", data, 12)
     header, record_size = struct.unpack_from("<Q8xQ", data, 16)

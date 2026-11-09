@@ -315,6 +315,18 @@ target_include_directories(tz PUBLIC ./tz)
 add_library(bc_decoder bc_decoder/bc_decoder.cpp)
 target_include_directories(bc_decoder PUBLIC ./bc_decoder)
 
+# Oodle Kraken decoder (powzix/ooz, GPL-3.0-or-later) for FromSoftware's DCX KRAK shader bundles.
+# x86-64 only: it uses SSE2 intrinsics.
+if (ARCHITECTURE_x86_64)
+    add_library(ooz ooz/kraken.cpp)
+    target_include_directories(ooz PUBLIC ./ooz)
+    if (MSVC)
+        target_compile_options(ooz PRIVATE /w)
+    else()
+        target_compile_options(ooz PRIVATE -w)
+    endif()
+endif()
+
 if (NOT TARGET RenderDoc::API)
     add_library(renderdoc INTERFACE)
     target_include_directories(renderdoc SYSTEM INTERFACE ./renderdoc)

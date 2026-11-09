@@ -14,6 +14,9 @@
 #include <fmt/format.h>
 #include <zlib.h>
 #include <zstd.h>
+#ifdef EDEN_HAS_OOZ_KRAKEN
+#include <ooz.h>
+#endif
 
 #include "video_core/shader_warm/shader_archives.h"
 
@@ -204,7 +207,25 @@ std::vector<u8> ZlibDecompress(Bytes payload, u64 size) {
     return output;
 }
 
-/// Unpacks a DCX file (zstd or zlib payload) and checks the result against the header's size.
+/// Decodes an Oodle Kraken (DCX KRAK) payload of exactly `size` bytes.
+std::vector<u8> KrakenDecompress(Bytes payload, u64 size) {
+#ifdef EDEN_HAS_OOZ_KRAKEN
+    std::vector<u8> output(static_cast<size_t>(size) + ooz::SafeSpace);
+    if (ooz::Kraken_Decompress(payload.data(), payload.size(), output.data(),
+                               static_cast<size_t>(size)) != static_cast<int>(size)) {
+        throw ArchiveError("invalid DCX Kraken stream");
+    }
+    output.resize(static_cast<size_t>(size));
+    return output;
+#else
+    (void)payload;
+    (void)size;
+    throw ArchiveError("DCX Kraken streams are only supported on x86-64");
+#endif
+}
+
+/// Unpacks a DCX file (zstd, zlib or Kraken payload) and checks the result against the header's
+/// size.
 std::vector<u8> DcxDecompress(Bytes data) {
     Extent(data, 0, 0x30);
     if (!Is(data, 0, std::string_view{"DCX\0", 4}) || !Is(data, 0x18, std::string_view{"DCS\0", 4}) ||
@@ -223,6 +244,8 @@ std::vector<u8> DcxDecompress(Bytes data) {
         result = ZstdDecompress(payload, nullptr);
     } else if (Is(data, 0x28, "DFLT")) {
         result = ZlibDecompress(payload, size);
+    } else if (Is(data, 0x28, "KRAK")) {
+        result = KrakenDecompress(payload, size);
     } else {
         throw ArchiveError("unsupported DCX compressor");
     }
@@ -324,8 +347,14 @@ struct Bnd4Member {
 /// formats or sizes.
 std::vector<Bnd4Member> ParseBnd4(Bytes data) {
     Extent(data, 0, 64);
+    // Format 0x74 (IDs, both name flags, compression) or 0x54 (no names1 flag, the same 36-byte
+    // records), with or without the name hash table (extended = 4) that is not read here: the
+    // Duskbloods material shader bundles use both.
     if (!Is(data, 0, "BND4") || !Is(data, 9, std::string_view{"\0\1\0", 3}) ||
-        !Is(data, 48, std::string_view{"\1t\0\0", 4})) {
+        (!Is(data, 48, std::string_view{"\1t\0\0", 4}) &&
+         !Is(data, 48, std::string_view{"\1T\0\0", 4}) &&
+         !Is(data, 48, std::string_view{"\1t\4\0", 4}) &&
+         !Is(data, 48, std::string_view{"\1T\4\0", 4}))) {
         throw ArchiveError("unsupported BND4 byte order or file-record format");
     }
     const u32 count = Le<u32>(data, 12);
@@ -814,8 +843,8 @@ struct Walker {
             Emit(ParseBahs(data));
         } else {
             const auto lower = Lower(name);
-            for (const std::string_view skip :
-                 {".json", ".presetb", ".meminfo", ".tex", ".byml", ".yaml", ".raw"}) {
+            for (const std::string_view skip : {".json", ".presetb", ".meminfo", ".metaparam",
+                                                ".tex", ".byml", ".yaml", ".raw"}) {
                 if (EndsWith(lower, skip)) {
                     return;
                 }
@@ -881,8 +910,8 @@ GameFileKind ClassifyGameFile(std::string_view path) {
     if (EndsWith(lower, ".zs")) {
         lower.resize(lower.size() - 3);
     }
-    for (const std::string_view extension :
-         {".bfsha", ".sarc", ".bnsh", ".cgsb", ".shn", ".sharcb"}) {
+    for (const std::string_view extension : {".bfsha", ".sarc", ".bnsh", ".cgsb", ".shn", ".sharcb",
+                                             ".shaderbnd.dcx", ".shaderbdlebnd.dcx"}) {
         if (EndsWith(lower, extension)) {
             return GameFileKind::ShaderArchive;
         }

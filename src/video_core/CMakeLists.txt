@@ -515,7 +515,8 @@ if(WIN32)
     target_link_libraries(video_core PRIVATE advapi32)
 endif()
 
-# Shader precache builder: game archives use zstd (also with dictionaries) and zlib.
+# Shader precache builder: game archives use zstd (also with dictionaries), zlib and, on x86-64,
+# Oodle Kraken (DCX KRAK).
 target_link_libraries(video_core PRIVATE zstd::zstd ZLIB::ZLIB)
 
 # Shader cache v2: record checksums, and a hash of the native lowering sources made at build time,
@@ -539,6 +540,10 @@ add_custom_command(
     VERBATIM)
 target_sources(video_core PRIVATE "${lowering_stamp}")
 target_include_directories(video_core PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
+if (TARGET ooz)
+    target_link_libraries(video_core PRIVATE ooz)
+    target_compile_definitions(video_core PRIVATE EDEN_HAS_OOZ_KRAKEN)
+endif()
 target_link_libraries(video_core PUBLIC shader_recompiler stb bc_decoder gpu_logging)
 if (ENABLE_OPENGL)
     target_link_libraries(video_core PUBLIC glad)

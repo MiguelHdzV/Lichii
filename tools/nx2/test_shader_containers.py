@@ -148,9 +148,14 @@ class ContainerTests(unittest.TestCase):
         struct.pack_into("<I", header, 12, 1)
         struct.pack_into("<Q", header, 16, 64)
         struct.pack_into("<Q", header, 32, 36)
-        header[48:52] = b"\1t\0\0"
         record = b"\x40\0\0\0\xff\xff\xff\xff" + struct.pack("<QQIII", len(payload), len(payload), offset, 0, 100)
-        self.assertEqual(parse_bnd4(header + record + name + payload), [("fragment.ppo", payload)])
+        for format_byte in b"tT":
+            for extended in (0, 4):
+                header[48:52] = bytes([1, format_byte, extended, 0])
+                self.assertEqual(parse_bnd4(header + record + name + payload), [("fragment.ppo", payload)])
+        header[48:52] = b"\1\x70\0\0"
+        with self.assertRaises(ArchiveError):
+            parse_bnd4(header + record + name + payload)
 
     def test_shn_separates_metadata_from_gpu_allocation(self):
         code = graphics(0)

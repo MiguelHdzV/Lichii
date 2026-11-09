@@ -69,7 +69,8 @@ private:
 /// What the precache builder does with a RomFS file.
 enum class GameFileKind : u8 {
     Other,            ///< Not read
-    ShaderArchive,    ///< *.bfsha, *.sarc, *.bnsh, *.cgsb, *.shn or *.sharcb, raw or zstd (.zs)
+    ShaderArchive,    ///< *.bfsha, *.sarc, *.bnsh, *.cgsb, *.shn or *.sharcb, raw or zstd (.zs),
+                      ///< and FromSoftware *.shaderbnd.dcx and *.shaderbdlebnd.dcx
     Effect,           ///< Effect/*.vsetb.byml.zs, read after every shader archive
     ZstdDictionaries, ///< Pack/ZsDic.pack.zs
 };
