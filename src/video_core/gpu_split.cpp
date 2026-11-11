@@ -552,6 +552,7 @@ void GpuSplit::BackLoop(std::stop_token stop_token) {
     const StutterTrace::ThreadScope stutter_thread{StutterTrace::Thread::Back};
     Common::SetCurrentThreadName("GPUBack");
     on_back_thread = true;
+    back_thread_id.store(ThreadId(), std::memory_order_relaxed);
     back_running.store(true, std::memory_order_release);
     Common::SetCurrentThreadPriority(Common::ThreadPriority::Critical);
     Common::SetCurrentThreadToPerformanceCores();
@@ -650,6 +651,7 @@ void GpuSplit::BackLoop(std::stop_token stop_token) {
         NotifyFront();
     }
     back_running.store(false, std::memory_order_seq_cst);
+    back_thread_id.store(0, std::memory_order_relaxed);
     front_wake.fetch_add(1, std::memory_order_seq_cst);
     front_wake.notify_all();
 }

@@ -132,22 +132,47 @@ public:
         return front_macros;
     }
 
+#if defined(_WIN32) && defined(__x86_64__) && (defined(__GNUC__) || defined(__clang__))
+    /// The calling thread's id from its TEB. MinGW builds use emulated thread_local: each read
+    /// was a call through TlsGetValue (~7% of the back thread in The Duskbloods' river, most of
+    /// it OnBackThread in Maxwell3D::CallMethod).
+    static constexpr bool fast_thread_id = true;
+    [[nodiscard]] static u32 ThreadId() {
+        u32 id;
+        asm("movl %%gs:0x48, %0" : "=r"(id));
+        return id;
+    }
+#else
+    static constexpr bool fast_thread_id = false;
+    [[nodiscard]] static u32 ThreadId() {
+        return 0;
+    }
+#endif
     /// Whether the calling thread is the back.
     [[nodiscard]] static bool OnBackThread() {
+        if constexpr (fast_thread_id) {
+            const u32 id = back_thread_id.load(std::memory_order_relaxed);
+            return id != 0 && id == ThreadId();
+        }
         return on_back_thread;
     }
     /// Marks the calling thread as the GPU thread (the front, or the only one without the split).
     static void MarkGpuThread() {
         on_gpu_thread = true;
+        gpu_thread_id.store(ThreadId(), std::memory_order_relaxed);
     }
     /// Whether the calling thread is the GPU thread (see MarkGpuThread).
     [[nodiscard]] static bool OnGpuThread() {
+        if constexpr (fast_thread_id) {
+            const u32 id = gpu_thread_id.load(std::memory_order_relaxed);
+            return id != 0 && id == ThreadId();
+        }
         return on_gpu_thread;
     }
     /// Whether the calling thread owns the Vulkan scheduler: the back while it runs, else the
     /// GPU thread. Other threads (CPU cores, services) must not record or submit work.
     [[nodiscard]] static bool OwnsScheduler() {
-        return Get().BackRunning() ? on_back_thread : on_gpu_thread;
+        return Get().BackRunning() ? OnBackThread() : OnGpuThread();
     }
     /// Called on the back before it sleeps waiting for work (the rasterizer submits deferred work).
     void SetIdleHook(void (*hook)(void*), void* argument) {
@@ -256,7 +281,7 @@ public:
     /// its idle hook, so the front never touches that state itself.
     template <typename Func>
     void Run(const Func& func, DrainSite site = DrainSite::Other) {
-        if (on_back_thread || !active) {
+        if (!active || OnBackThread()) {
             func();
             return;
         }
@@ -483,6 +508,8 @@ private:
     static GpuSplit instance;
     static inline thread_local bool on_back_thread{};
     static inline thread_local bool on_gpu_thread{};
+    static inline std::atomic<u32> back_thread_id{};
+    static inline std::atomic<u32> gpu_thread_id{};
     void (*idle_hook)(void*){};
     void* idle_argument{};
     alignas(64) std::atomic<bool> hook_requested{};
