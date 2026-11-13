@@ -14,6 +14,7 @@
 #include "core/hle/kernel/k_page_table.h"
 #include "core/hle/kernel/k_process.h"
 #include "memory_manager.h"
+#include "video_core/gpu_split.h"
 #include "video_core/guest_memory.h"
 #include "video_core/nx2.h"
 #include "video_core/nx2_perf.h"
@@ -805,8 +806,18 @@ const MemoryManager::MappingSnapshot& MemoryManager::CurrentSnapshot() const {
         u64 serial;
         std::shared_ptr<const MappingSnapshot> snapshot;
     };
-    thread_local std::array<View, 4> views{};
-    View& view = views[unique_identifier % views.size()];
+    static std::array<View, 4> back_views{};
+    static std::array<View, 4> gpu_views{};
+    std::array<View, 4>* views_array;
+    if (VideoCommon::GpuSplit::OnBackThread()) {
+        views_array = &back_views;
+    } else if (VideoCommon::GpuSplit::OnGpuThread()) {
+        views_array = &gpu_views;
+    } else {
+        thread_local std::array<View, 4> thread_views{};
+        views_array = &thread_views;
+    }
+    View& view = (*views_array)[unique_identifier % views_array->size()];
     const u64 serial = map_serial.load(std::memory_order_acquire);
     if (view.owner == unique_identifier + 1 && view.serial == serial) {
         return *view.snapshot;
