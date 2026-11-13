@@ -200,6 +200,9 @@ void TextureCache<P>::RunGarbageCollector(bool out_of_memory) {
     const auto Cleanup = [this, &num_iterations, &high_priority_mode, &aggressive_mode, &keep,
                           &evict_old_costly, out_of_memory, &overlap_downloads,
                           download_overlaps, async_downloads](ImageId image_id) {
+        // Captured for the Vulkan path; the OpenGL instantiation does not read them.
+        (void)download_overlaps;
+        (void)async_downloads;
         if (num_iterations == 0) {
             return true;
         }
